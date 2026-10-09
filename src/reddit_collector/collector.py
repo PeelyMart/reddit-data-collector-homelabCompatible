@@ -5,6 +5,7 @@ stays thin (argument parsing, exit codes, output formatting only).
 """
 
 from __future__ import annotations
+from .progress_reporter import ProgressReporter
 
 import logging
 from pathlib import Path
@@ -132,12 +133,33 @@ def _run(
 
     pages = 0
     collected = 0
-    stopped = False
+    stopped = False 
+
+    progress = ProgressReporter()
+
+    progress.report(
+        status="running",
+        collected=paginator.total_fetched,
+        total=None,
+        pages=pages,
+        run_id=store.run_id,
+    )
+
+
     for page in paginator.iter_pages():
         store.append_page(page)
         pages += 1
         collected += len(page)
-        save_checkpoint(checkpoint_dir, paginator.state(), run_id=store.run_id)
+        save_checkpoint(checkpoint_dir, paginator.state(), run_id=store.run_id) 
+
+        progress.report(
+            status="running",
+            collected=paginator.total_fetched,
+            total=None,
+            pages=pages,
+            run_id=store.run_id,
+        )   
+
         if should_stop is not None and should_stop():
             # Stop only between finished, checkpointed pages: nothing is lost
             # (current page stored) and nothing duplicates on resume.
@@ -154,7 +176,24 @@ def _run(
         "posts_this_run": collected,
         "total_posts": paginator.total_fetched,
         "stopped": stopped,
-    }
+    } 
+    
+    progress.report(
+    status="stopped" if summary["stopped"] else "completed",
+    collected=summary["total_posts"],
+    total=None,
+    pages=summary["pages"],
+    run_id=summary["run_id"],
+    )
+
+    
+
+
+
+
+
+
+
     if stopped:
         logger.info(
             "Collection stopped by user: run %s, %d total (resume to continue)",
